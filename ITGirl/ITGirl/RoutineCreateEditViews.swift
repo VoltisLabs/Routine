@@ -709,155 +709,26 @@ struct EditRoutineView: View {
     @State private var coverURLsText = ""
     @State private var showOtherWarning = false
     @State private var showStepsWarning = false
+    @State private var showApiSyncAlert = false
+    @State private var apiSyncMessage = ""
 
     var body: some View {
+        editRoutineChrome
+    }
+
+    private var editRoutineChrome: some View {
         ZStack {
             ItGirlScreenBackdrop()
             NavigationStack {
                 ScrollView {
-                    VStack(spacing: 22) {
-                        ItGirlCard {
-                            VStack(alignment: .leading, spacing: 14) {
-                                TextField("Title", text: $routine.title)
-                                    .font(.body.weight(.medium))
-                                    .foregroundStyle(.primary)
-                                    .itGirlRoundedField()
-                                Divider()
-                                    .overlay(ThemeColors.accent(for: scheme, palette: colorPalette).opacity(0.25))
-                                Picker("Type", selection: $routine.kind) {
-                                    ForEach(RoutineKind.allCases) { k in
-                                        Text(k.title).tag(k)
-                                    }
-                                }
-                                .pickerStyle(.menu)
-                                .tint(ThemeColors.accent(for: scheme, palette: colorPalette))
-
-                                if routine.kind == .other {
-                                    VStack(alignment: .leading, spacing: 6) {
-                                        ITGFieldLabel(text: "Name this category")
-                                        TextField("e.g. Meal prep, Travel reset", text: $customOtherLabel)
-                                            .itGirlRoundedField()
-                                    }
-                                    .padding(.top, 4)
-                                }
-                            }
-                        }
-
-                        ItGirlSectionHeader(title: "Photos", systemImage: "photo.on.rectangle.angled")
-                        ItGirlCard {
-                            VStack(alignment: .leading, spacing: 12) {
-                                PhotosPicker(
-                                    selection: $photoPickerItems,
-                                    maxSelectionCount: 8,
-                                    matching: .images,
-                                    photoLibrary: .shared()
-                                ) {
-                                    Label("Replace / add from library", systemImage: "photo.badge.plus")
-                                        .frame(maxWidth: .infinity)
-                                        .padding(.vertical, 10)
-                                }
-                                .buttonStyle(.bordered)
-                                .tint(ThemeColors.accent(for: scheme, palette: colorPalette))
-                                .onChange(of: photoPickerItems) { _, items in
-                                    Task { await reloadStagedPhotos(from: items) }
-                                }
-                                if !stagedPhotoData.isEmpty {
-                                    ScrollView(.horizontal, showsIndicators: false) {
-                                        HStack(spacing: 10) {
-                                            ForEach(Array(stagedPhotoData.enumerated()), id: \.offset) { _, data in
-                                                if let ui = UIImage(data: data) {
-                                                    Image(uiImage: ui)
-                                                        .resizable()
-                                                        .scaledToFill()
-                                                        .frame(width: 88, height: 88)
-                                                        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-                                                }
-                                            }
-                                        }
-                                    }
-                                    Button("Clear all photos", role: .destructive) {
-                                        stagedPhotoData = []
-                                        photoPickerItems = []
-                                    }
-                                    .font(.caption)
-                                }
-
-                                Divider()
-                                    .overlay(ThemeColors.accent(for: scheme, palette: colorPalette).opacity(0.2))
-                                ITGFieldLabel(text: "Cover image URLs (one per line)")
-                                TextField("https://…", text: $coverURLsText, axis: .vertical)
-                                    .lineLimit(3 ... 8)
-                                    .itGirlRoundedField()
-                            }
-                        }
-
-                        HStack {
-                            ItGirlSectionHeader(title: "Steps", systemImage: "list.bullet.clipboard.fill")
-                            Spacer()
-                            Button {
-                                if playfulAnimations {
-                                    withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
-                                        steps.append(RoutineStep())
-                                    }
-                                } else {
-                                    steps.append(RoutineStep())
-                                }
-                            } label: {
-                                Label("Add step", systemImage: "plus.circle.fill")
-                                    .font(.subheadline.weight(.semibold))
-                                    .symbolEffect(.bounce, value: steps.count)
-                            }
-                            .tint(ThemeColors.secondaryAccent(for: scheme, palette: colorPalette))
-                            .sensoryFeedback(.impact(weight: .medium), trigger: steps.count)
-                        }
-                        .padding(.horizontal, 4)
-
-                        ForEach(Array(steps.enumerated()), id: \.element.id) { idx, _ in
-                            StepEditorBlock(
-                                step: $steps[idx],
-                                index: idx,
-                                total: steps.count,
-                                scheme: scheme,
-                                palette: colorPalette,
-                                playfulAnimations: playfulAnimations,
-                                onDelete: { deleteStep(at: idx) },
-                                onMoveUp: { moveStep(from: idx, to: idx - 1) },
-                                onMoveDown: { moveStep(from: idx, to: idx + 1) }
-                            )
-                        }
-
-                        Button {
-                            save()
-                        } label: {
-                            Label("Save changes", systemImage: "checkmark.circle.fill")
-                        }
-                        .buttonStyle(LiquidGlassPrimaryButtonStyle(accent: ThemeColors.secondaryAccent(for: scheme, palette: colorPalette)))
-                        .disabled(!canSave)
-                    }
-                    .padding()
-                    .padding(.bottom, 28)
+                    editRoutineFormStack
+                        .padding()
+                        .padding(.bottom, 28)
                 }
                 .navigationTitle("Edit")
                 .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
-                .onAppear {
-                    if let s = routine.steps, !s.isEmpty {
-                        steps = s
-                    } else {
-                        steps = [
-                            RoutineStep(
-                                title: "Your routine",
-                                instructions: routine.body,
-                                durationMinutes: nil,
-                                gear: [],
-                                notes: ""
-                            )
-                        ]
-                    }
-                    customOtherLabel = routine.customKindLabel ?? ""
-                    coverURLsText = routine.remoteCoverImageURLs.joined(separator: "\n")
-                    stagedPhotoData = routine.imageAttachmentIds.compactMap { RoutineImageStore.shared.loadData(id: $0) }
-                }
+                .onAppear(perform: loadEditRoutineState)
                 .alert("Name your category", isPresented: $showOtherWarning) {
                     Button("OK", role: .cancel) {}
                 } message: {
@@ -868,9 +739,164 @@ struct EditRoutineView: View {
                 } message: {
                     Text("Each step needs a title or instructions.")
                 }
+                .alert("Couldn’t sync to server", isPresented: $showApiSyncAlert) {
+                    Button("OK", role: .cancel) {}
+                } message: {
+                    Text(apiSyncMessage)
+                }
             }
         }
         .itGirlAppearAnimation(playful: playfulAnimations)
+    }
+
+    @ViewBuilder
+    private var editRoutineFormStack: some View {
+        VStack(spacing: 22) {
+            ItGirlCard {
+                VStack(alignment: .leading, spacing: 14) {
+                    TextField("Title", text: $routine.title)
+                        .font(.body.weight(.medium))
+                        .foregroundStyle(.primary)
+                        .itGirlRoundedField()
+                    Divider()
+                        .overlay(ThemeColors.accent(for: scheme, palette: colorPalette).opacity(0.25))
+                    Picker("Type", selection: $routine.kind) {
+                        ForEach(RoutineKind.allCases) { k in
+                            Text(k.title).tag(k)
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .tint(ThemeColors.accent(for: scheme, palette: colorPalette))
+
+                    if routine.kind == .other {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ITGFieldLabel(text: "Name this category")
+                            TextField("e.g. Meal prep, Travel reset", text: $customOtherLabel)
+                                .itGirlRoundedField()
+                        }
+                        .padding(.top, 4)
+                    }
+                }
+            }
+
+            ItGirlSectionHeader(title: "Photos", systemImage: "photo.on.rectangle.angled")
+            ItGirlCard {
+                editPhotosCard
+            }
+
+            HStack {
+                ItGirlSectionHeader(title: "Steps", systemImage: "list.bullet.clipboard.fill")
+                Spacer()
+                Button {
+                    if playfulAnimations {
+                        withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                            steps.append(RoutineStep())
+                        }
+                    } else {
+                        steps.append(RoutineStep())
+                    }
+                } label: {
+                    Label("Add step", systemImage: "plus.circle.fill")
+                        .font(.subheadline.weight(.semibold))
+                        .symbolEffect(.bounce, value: steps.count)
+                }
+                .tint(ThemeColors.secondaryAccent(for: scheme, palette: colorPalette))
+                .sensoryFeedback(.impact(weight: .medium), trigger: steps.count)
+            }
+            .padding(.horizontal, 4)
+
+            ForEach(Array(steps.enumerated()), id: \.element.id) { idx, _ in
+                StepEditorBlock(
+                    step: $steps[idx],
+                    index: idx,
+                    total: steps.count,
+                    scheme: scheme,
+                    palette: colorPalette,
+                    playfulAnimations: playfulAnimations,
+                    onDelete: { deleteStep(at: idx) },
+                    onMoveUp: { moveStep(from: idx, to: idx - 1) },
+                    onMoveDown: { moveStep(from: idx, to: idx + 1) },
+                    onSaveStep: { saveStepEdit(at: idx) },
+                    onAddStepAfter: { addStepAfterEdit(at: idx) },
+                    onDuplicateStep: { duplicateStepEdit(at: idx) }
+                )
+            }
+
+            Button {
+                save()
+            } label: {
+                Label("Save changes", systemImage: "checkmark.circle.fill")
+            }
+            .buttonStyle(LiquidGlassPrimaryButtonStyle(accent: ThemeColors.secondaryAccent(for: scheme, palette: colorPalette)))
+            .disabled(!canSave)
+        }
+    }
+
+    @ViewBuilder
+    private var editPhotosCard: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            PhotosPicker(
+                selection: $photoPickerItems,
+                maxSelectionCount: 8,
+                matching: .images,
+                photoLibrary: .shared()
+            ) {
+                Label("Replace / add from library", systemImage: "photo.badge.plus")
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+            }
+            .buttonStyle(.bordered)
+            .tint(ThemeColors.accent(for: scheme, palette: colorPalette))
+            .onChange(of: photoPickerItems) { _, items in
+                Task { await reloadStagedPhotos(from: items) }
+            }
+            if !stagedPhotoData.isEmpty {
+                ScrollView(.horizontal, showsIndicators: false) {
+                    HStack(spacing: 10) {
+                        ForEach(Array(stagedPhotoData.enumerated()), id: \.offset) { _, data in
+                            if let ui = UIImage(data: data) {
+                                Image(uiImage: ui)
+                                    .resizable()
+                                    .scaledToFill()
+                                    .frame(width: 88, height: 88)
+                                    .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+                            }
+                        }
+                    }
+                }
+                Button("Clear all photos", role: .destructive) {
+                    stagedPhotoData = []
+                    photoPickerItems = []
+                }
+                .font(.caption)
+            }
+
+            Divider()
+                .overlay(ThemeColors.accent(for: scheme, palette: colorPalette).opacity(0.2))
+            ITGFieldLabel(text: "Cover image URLs (one per line)")
+            TextField("https://…", text: $coverURLsText, axis: .vertical)
+                .lineLimit(3 ... 8)
+                .itGirlRoundedField()
+        }
+    }
+
+    private func loadEditRoutineState() {
+        if let s = routine.steps, !s.isEmpty {
+            steps = s
+        } else {
+            steps = [
+                RoutineStep(
+                    title: "Your routine",
+                    instructions: routine.body,
+                    durationMinutes: nil,
+                    gear: [],
+                    notes: ""
+                )
+            ]
+        }
+        customOtherLabel = routine.customKindLabel ?? ""
+        coverURLsText = routine.remoteCoverImageURLs.joined(separator: "\n")
+        stagedPhotoData = routine.imageAttachmentIds.compactMap { RoutineImageStore.shared.loadData(id: $0) }
     }
 
     private var canSave: Bool {
@@ -879,6 +905,54 @@ struct EditRoutineView: View {
         }
         return !routine.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
             && steps.contains { $0.hasAnyContent }
+    }
+
+    private func addStepAfterEdit(at index: Int) {
+        guard steps.indices.contains(index) else { return }
+        if playfulAnimations {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                steps.insert(RoutineStep(), at: index + 1)
+            }
+        } else {
+            steps.insert(RoutineStep(), at: index + 1)
+        }
+    }
+
+    private func duplicateStepEdit(at index: Int) {
+        guard steps.indices.contains(index) else { return }
+        var copy = steps[index]
+        copy.id = UUID()
+        if playfulAnimations {
+            withAnimation(.spring(response: 0.45, dampingFraction: 0.78)) {
+                steps.insert(copy, at: index + 1)
+            }
+        } else {
+            steps.insert(copy, at: index + 1)
+        }
+    }
+
+    private func saveStepEdit(at _: Int) {
+        guard !routine.title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        if routine.kind == .other, customOtherLabel.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+            showOtherWarning = true
+            return
+        }
+        routine.steps = steps
+        let valid = steps.filter(\.hasAnyContent)
+        routine.body = valid.isEmpty ? routine.body : Routine.flattenedBody(from: valid)
+        routine.customKindLabel = routine.kind == .other ? customOtherLabel.trimmingCharacters(in: .whitespacesAndNewlines) : nil
+        routine.remoteCoverImageURLs = parsedRoutineImageURLLines(coverURLsText)
+        library.updateMyRoutine(routine)
+        Task {
+            do {
+                _ = try await VoltisGraphQLClient.shared.syncRoutineForDiscover(routine)
+            } catch {
+                await MainActor.run {
+                    apiSyncMessage = error.localizedDescription
+                    showApiSyncAlert = true
+                }
+            }
+        }
     }
 
     private func moveStep(from: Int, to: Int) {
@@ -930,6 +1004,16 @@ struct EditRoutineView: View {
         routine.imageAttachmentIds = newIds
         routine.remoteCoverImageURLs = parsedRoutineImageURLLines(coverURLsText)
         library.updateMyRoutine(routine)
+        Task {
+            do {
+                _ = try await VoltisGraphQLClient.shared.syncRoutineForDiscover(routine)
+            } catch {
+                await MainActor.run {
+                    apiSyncMessage = error.localizedDescription
+                    showApiSyncAlert = true
+                }
+            }
+        }
         dismiss()
     }
 }

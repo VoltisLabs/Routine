@@ -168,16 +168,12 @@ struct RoutineDetailView: View {
             ScrollView {
                 VStack(alignment: .leading, spacing: 18) {
                     RoutineCoverStrip(routine: routine, height: 220, cornerRadius: 22)
-                        .padding(.horizontal)
 
                     RoutineDetailInstrumentStrip(routine: routine)
-                        .padding(.horizontal)
 
                     RoutineDetailSignalRack(routine: routine)
-                        .padding(.horizontal)
 
                     RoutineDetailDurationTimeline(routine: routine)
-                        .padding(.horizontal)
 
                     HStack {
                         Label(routine.displayKindTitle, systemImage: routine.kind.symbolName)
@@ -188,19 +184,16 @@ struct RoutineDetailView: View {
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }
-                    .padding(.horizontal)
 
                     Text("by \(routine.authorDisplayName)")
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal)
 
                     if routine.imageAttachmentIds.count > 1 {
                         VStack(alignment: .leading, spacing: 6) {
                             Text("LOCAL ROLL")
                                 .font(.caption2.weight(.heavy))
                                 .foregroundStyle(.tertiary)
-                                .padding(.horizontal)
                             ScrollView(.horizontal, showsIndicators: false) {
                                 HStack(spacing: 10) {
                                     ForEach(routine.imageAttachmentIds, id: \.self) { imgId in
@@ -220,13 +213,12 @@ struct RoutineDetailView: View {
                                         }
                                     }
                                 }
-                                .padding(.horizontal)
+                                .padding(.horizontal, 4)
                             }
                         }
                     }
 
                     RoutineRemoteGalleryStrip(urls: remoteGalleryTail)
-                        .padding(.horizontal)
 
                     VStack(alignment: .leading, spacing: 16) {
                         ForEach(Array(routine.resolvedSteps.enumerated()), id: \.element.id) { index, step in
@@ -235,10 +227,11 @@ struct RoutineDetailView: View {
                                 stepNumber: index + 1,
                                 durationTotal: routine.resolvedTotalDurationMinutes
                             )
-                            .padding(.horizontal)
                         }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.horizontal, ITGirlLayoutMetrics.scrollContentHorizontalInset)
                 .padding(.vertical)
             }
         }

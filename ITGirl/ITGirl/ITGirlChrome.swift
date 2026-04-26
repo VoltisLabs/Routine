@@ -1,6 +1,13 @@
 import SwiftUI
 import UIKit
 
+// MARK: - Layout
+
+enum ITGirlLayoutMetrics {
+    /// Full-width scroll screens (routine detail, etc.): explicit inset so content never hugs the bezel.
+    static let scrollContentHorizontalInset: CGFloat = 20
+}
+
 // MARK: - Screen backdrop
 
 struct ItGirlScreenBackdrop: View {
