@@ -1190,7 +1190,7 @@ struct SignInView: View {
     @AppStorage("itgirl.signedIn") private var signedIn = false
     @AppStorage("itgirl.authToken") private var authToken = ""
     @AppStorage("itgirl.refreshToken") private var refreshToken = ""
-    @State private var email = ""
+    @State private var username = ""
     @State private var password = ""
     @State private var isSubmitting = false
     @State private var authError = ""
@@ -1201,14 +1201,13 @@ struct SignInView: View {
             ItGirlScreenBackdrop()
             Form {
                 Section("Sign In") {
-                    TextField("Email", text: $email)
+                    TextField("Username", text: $username)
                         .textInputAutocapitalization(.never)
-                        .keyboardType(.emailAddress)
                     SecureField("Password", text: $password)
                     Button(isSubmitting ? "Signing in..." : "Sign In") {
                         signIn()
                     }
-                    .disabled(isSubmitting || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
+                    .disabled(isSubmitting || username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || password.isEmpty)
                         .frame(maxWidth: .infinity, alignment: .center)
                 }
             }
@@ -1232,7 +1231,7 @@ struct SignInView: View {
         Task {
             do {
                 let session = try await VoltisGraphQLClient.shared.signIn(
-                    email: email.trimmingCharacters(in: .whitespacesAndNewlines),
+                    username: username.trimmingCharacters(in: .whitespacesAndNewlines),
                     password: password
                 )
                 await MainActor.run {
@@ -1262,6 +1261,7 @@ struct SignUpView: View {
     @AppStorage("itgirl.refreshToken") private var refreshToken = ""
     @State private var firstName = ""
     @State private var lastName = ""
+    @State private var username = ""
     @State private var email = ""
     @State private var password = ""
     @State private var confirmPassword = ""
@@ -1276,6 +1276,8 @@ struct SignUpView: View {
                 Section("Create account") {
                     TextField("First name", text: $firstName)
                     TextField("Last name", text: $lastName)
+                    TextField("Username", text: $username)
+                        .textInputAutocapitalization(.never)
                     TextField("Email", text: $email)
                         .textInputAutocapitalization(.never)
                         .keyboardType(.emailAddress)
@@ -1288,6 +1290,7 @@ struct SignUpView: View {
                         isSubmitting
                             || firstName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             || lastName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                            || username.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             || email.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
                             || password.isEmpty
                             || password != confirmPassword
@@ -1322,6 +1325,7 @@ struct SignUpView: View {
                 let session = try await VoltisGraphQLClient.shared.signUp(
                     firstName: firstName.trimmingCharacters(in: .whitespacesAndNewlines),
                     lastName: lastName.trimmingCharacters(in: .whitespacesAndNewlines),
+                    username: username.trimmingCharacters(in: .whitespacesAndNewlines),
                     email: email.trimmingCharacters(in: .whitespacesAndNewlines),
                     password: password
                 )

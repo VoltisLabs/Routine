@@ -46,8 +46,8 @@ class GraphQLFlowTests(TestCase):
         token = register['register']['token']
         login = self.gql(
             """
-            mutation Login($email: String!, $password: String!) {
-              login(email: $email, password: $password) {
+            mutation Login($username: String!, $password: String!) {
+              login(username: $username, password: $password) {
                 success
                 token
                 refreshToken
@@ -55,7 +55,7 @@ class GraphQLFlowTests(TestCase):
               }
             }
             """,
-            {"email": "test@itgirl.app", "password": "Password123!"},
+            {"username": "testuser", "password": "Password123!"},
         )
         self.assertTrue(login["login"]["success"])
         token = login["login"]["token"]

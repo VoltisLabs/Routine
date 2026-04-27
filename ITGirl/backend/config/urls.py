@@ -3,6 +3,7 @@ from django.conf.urls.static import static
 from django.contrib import admin
 from django.http import JsonResponse
 from django.urls import path
+from django.views.decorators.csrf import csrf_exempt
 from graphene_django.views import GraphQLView
 from apps.payments.views import stripe_webhook
 
@@ -14,7 +15,8 @@ def health(_: object) -> JsonResponse:
 urlpatterns = [
     path('admin/', admin.site.urls),
     path('healthz', health),
-    path('graphql/', GraphQLView.as_view(graphiql=settings.DEBUG)),
+    # Mobile + API clients POST JSON without Django session CSRF tokens.
+    path('graphql/', csrf_exempt(GraphQLView.as_view(graphiql=settings.DEBUG))),
     path('webhooks/stripe/', stripe_webhook),
 ]
 

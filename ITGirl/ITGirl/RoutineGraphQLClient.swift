@@ -10,7 +10,11 @@ enum RoutineGraphQL {
            let resolved = URL(string: "graphql/", relativeTo: base)?.absoluteURL {
             return resolved
         }
+#if DEBUG
+        return URL(string: "http://127.0.0.1:8000/graphql/")!
+#else
         return URL(string: "https://routine.voltislabs.uk/graphql/")!
+#endif
     }
 }
 
@@ -67,11 +71,11 @@ final class VoltisGraphQLClient: @unchecked Sendable {
         )
     }
 
-    func signIn(email: String, password: String) async throws -> AuthSessionPayload {
+    func signIn(username: String, password: String) async throws -> AuthSessionPayload {
         let raw = try await executeJSON(
             query: """
-            mutation ITGirlLogin($email: String!, $password: String!) {
-              login(email: $email, password: $password) {
+            mutation ITGirlLogin($username: String!, $password: String!) {
+              login(username: $username, password: $password) {
                 success
                 errors
                 token
@@ -84,7 +88,7 @@ final class VoltisGraphQLClient: @unchecked Sendable {
               }
             }
             """,
-            variables: ["email": email, "password": password]
+            variables: ["username": username, "password": password]
         )
 
         guard let login = raw["login"] as? [String: Any] else {
@@ -106,8 +110,8 @@ final class VoltisGraphQLClient: @unchecked Sendable {
         )
     }
 
-    func signUp(firstName: String, lastName: String, email: String, password: String) async throws -> AuthSessionPayload {
-        let usernameBase = email.split(separator: "@").first.map(String.init) ?? "user"
+    func signUp(firstName: String, lastName: String, username: String, email: String, password: String) async throws -> AuthSessionPayload {
+        let normalizedUsername = username.trimmingCharacters(in: .whitespacesAndNewlines)
         let first = firstName.trimmingCharacters(in: .whitespacesAndNewlines)
         let last = lastName.trimmingCharacters(in: .whitespacesAndNewlines)
         let displayName = "\(first) \(last)".trimmingCharacters(in: .whitespacesAndNewlines)
@@ -142,7 +146,7 @@ final class VoltisGraphQLClient: @unchecked Sendable {
             variables: [
                 "displayName": displayName,
                 "email": email,
-                "username": usernameBase,
+                "username": normalizedUsername,
                 "firstName": first,
                 "lastName": last,
                 "password1": password,

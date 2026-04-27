@@ -94,7 +94,7 @@ class SendSmsOtp(graphene.ObjectType):
 
 class Mutation(graphene.ObjectType):
     sendSmsOtp = graphene.Field(SendSmsOtp, action=graphene.String(), channel=graphene.String(), phoneNumber=graphene.String())
-    login = graphene.Field(LoginPayload, email=graphene.String(), username=graphene.String(), password=graphene.String(required=True))
+    login = graphene.Field(LoginPayload, username=graphene.String(required=True), password=graphene.String(required=True))
     register = graphene.Field(
         RegisterPayload,
         displayName=graphene.String(),
@@ -136,14 +136,8 @@ class Mutation(graphene.ObjectType):
         return SendSmsOtp(success=True)
 
     @staticmethod
-    def resolve_login(root, info, password: str, email: Optional[str] = None, username: Optional[str] = None):
-        user = None
-        if email:
-            user_obj = User.objects.filter(email__iexact=email).first()
-            if user_obj:
-                user = authenticate(info.context, username=user_obj.username, password=password)
-        elif username:
-            user = authenticate(info.context, username=username, password=password)
+    def resolve_login(root, info, username: str, password: str):
+        user = authenticate(info.context, username=username, password=password)
 
         if not user:
             return LoginPayload(
