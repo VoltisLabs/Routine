@@ -3,11 +3,11 @@ name: backend-ci
 on:
   push:
     paths:
-      - 'backend/**'
+      - 'ITGirl/backend/**'
       - '.github/workflows/backend-ci.yml'
   pull_request:
     paths:
-      - 'backend/**'
+      - 'ITGirl/backend/**'
       - '.github/workflows/backend-ci.yml'
 
 jobs:
@@ -30,7 +30,7 @@ jobs:
 
     defaults:
       run:
-        working-directory: backend
+        working-directory: ITGirl/backend
 
     env:
       DJANGO_SECRET_KEY: ci-secret
