@@ -54,10 +54,33 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     needs: build-and-test
-    if: ${{ secrets.DEPLOY_HOST != '' && secrets.DEPLOY_USER != '' && secrets.DEPLOY_SSH_KEY != '' && secrets.DEPLOY_PATH != '' && secrets.BACKEND_ENV_FILE != '' && secrets.DEPLOY_PORT != '' }}
+    env:
+      DEPLOY_HOST: ${{ secrets.DEPLOY_HOST }}
+      DEPLOY_USER: ${{ secrets.DEPLOY_USER }}
+      DEPLOY_SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+      DEPLOY_PATH: ${{ secrets.DEPLOY_PATH }}
+      DEPLOY_PORT: ${{ secrets.DEPLOY_PORT }}
+      BACKEND_ENV_FILE: ${{ secrets.BACKEND_ENV_FILE }}
     steps:
       - uses: actions/checkout@v4
+      - name: Check deploy secrets
+        id: check
+        run: |
+          missing=0
+          for name in DEPLOY_HOST DEPLOY_USER DEPLOY_SSH_KEY DEPLOY_PATH DEPLOY_PORT BACKEND_ENV_FILE; do
+            value="${!name}"
+            if [ -z "$value" ]; then
+              echo "Missing $name"
+              missing=1
+            fi
+          done
+          if [ "$missing" -eq 0 ]; then
+            echo "can_deploy=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "can_deploy=false" >> "$GITHUB_OUTPUT"
+          fi
       - name: Upload backend bundle
+        if: ${{ steps.check.outputs.can_deploy == 'true' }}
         uses: appleboy/scp-action@v0.1.7
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -68,6 +91,7 @@ jobs:
           target: "${{ secrets.DEPLOY_PATH }}"
           strip_components: 1
       - name: Deploy on server
+        if: ${{ steps.check.outputs.can_deploy == 'true' }}
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.DEPLOY_HOST }}
@@ -86,12 +110,7 @@ jobs:
             docker compose exec -T backend python manage.py migrate
             docker compose exec -T backend python manage.py seed_demo
             curl -fsS http://127.0.0.1:8000/healthz
-
-  deploy-missing-secrets:
-    runs-on: ubuntu-latest
-    needs: build-and-test
-    if: ${{ secrets.DEPLOY_HOST == '' || secrets.DEPLOY_USER == '' || secrets.DEPLOY_SSH_KEY == '' || secrets.DEPLOY_PATH == '' || secrets.BACKEND_ENV_FILE == '' || secrets.DEPLOY_PORT == '' }}
-    steps:
       - name: Explain missing deploy secrets
+        if: ${{ steps.check.outputs.can_deploy != 'true' }}
         run: |
           echo "Deployment skipped: configure DEPLOY_HOST, DEPLOY_USER, DEPLOY_SSH_KEY, DEPLOY_PATH, BACKEND_ENV_FILE (and optional DEPLOY_PORT)."
