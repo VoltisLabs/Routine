@@ -53,21 +53,41 @@ struct RoutineFeedRealCard: View {
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
-            ZStack(alignment: .bottomLeading) {
+            ZStack {
                 RoutineCoverStrip(routine: routine, height: 160, cornerRadius: 20)
                     .allowsHitTesting(false)
-                HStack(spacing: 8) {
-                    Label(routine.displayKindTitle, systemImage: routine.kind.symbolName)
-                        .font(.caption2.weight(.bold))
-                        .padding(.horizontal, 8)
-                        .padding(.vertical, 5)
-                        .background(.ultraThinMaterial, in: Capsule())
+
+                VStack {
+                    HStack {
+                        Spacer(minLength: 0)
+                        if routine.isPaywalled {
+                            Text(routine.displayUnlockPriceGBP)
+                                .font(.caption.weight(.bold))
+                                .foregroundStyle(.orange)
+                                .padding(.horizontal, 9)
+                                .padding(.vertical, 6)
+                                .background(.ultraThinMaterial, in: Capsule())
+                        }
+                    }
                     Spacer(minLength: 0)
-                    Image(systemName: "chevron.right")
-                        .font(.caption.weight(.semibold))
-                        .foregroundStyle(.secondary)
-                        .padding(8)
-                        .background(.ultraThinMaterial, in: Circle())
+                }
+                .padding(10)
+
+                VStack {
+                    Spacer(minLength: 0)
+                    HStack(spacing: 8) {
+                        Label(routine.displayKindTitle, systemImage: routine.kind.symbolName)
+                            .font(.caption2.weight(.bold))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 5)
+                            .background(.ultraThinMaterial, in: Capsule())
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right")
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                            .padding(8)
+                            .background(.ultraThinMaterial, in: Circle())
+                    }
                 }
                 .padding(10)
             }

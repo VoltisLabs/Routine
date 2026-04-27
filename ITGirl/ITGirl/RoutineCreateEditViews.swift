@@ -8,6 +8,8 @@ private struct CreateRoutineDraftSnapshot: Codable {
     var customOtherLabel: String
     var steps: [RoutineStep]
     var coverURLsText: String
+    var isPaywalled: Bool
+    var unlockPriceCredits: Int
 }
 
 private enum CreateDraftStore {
@@ -360,6 +362,7 @@ struct CreateRoutineView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorPalette) private var colorPalette
     @AppStorage("itgirl.playfulAnimations") private var playfulAnimations = true
+    @AppStorage("itgirl.authToken") private var authToken = ""
 
     @State private var title = ""
     @State private var kind: RoutineKind = .grwm
@@ -368,6 +371,8 @@ struct CreateRoutineView: View {
     @State private var photoPickerItems: [PhotosPickerItem] = []
     @State private var stagedPhotoData: [Data] = []
     @State private var coverImageURLsText = ""
+    @State private var isPaywalled = false
+    @State private var unlockPriceText = "5"
     @State private var didPublish = false
     @State private var showOtherWarning = false
     @State private var showStepsWarning = false
@@ -412,6 +417,18 @@ struct CreateRoutineView: View {
                                             .itGirlRoundedField()
                                     }
                                     .padding(.top, 4)
+                                }
+
+                                Divider()
+                                    .overlay(ThemeColors.accent(for: scheme, palette: colorPalette).opacity(0.25))
+                                Toggle("Lock this routine behind a paywall", isOn: $isPaywalled)
+                                if isPaywalled {
+                                    VStack(alignment: .leading, spacing: 6) {
+                                        ITGFieldLabel(text: "Unlock price (credits)")
+                                        TextField("5", text: $unlockPriceText)
+                                            .keyboardType(.numberPad)
+                                            .itGirlRoundedField()
+                                    }
                                 }
                             }
                         }
@@ -519,6 +536,7 @@ struct CreateRoutineView: View {
                     .padding(.bottom, 28)
                 }
                 .navigationTitle("New routine")
+                .navigationBarTitleDisplayMode(.inline)
                 .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
                 .alert("Name your category", isPresented: $showOtherWarning) {
                     Button("OK", role: .cancel) {}
@@ -609,7 +627,9 @@ struct CreateRoutineView: View {
             kind: kind,
             customOtherLabel: customOtherLabel,
             steps: steps,
-            coverURLsText: coverImageURLsText
+            coverURLsText: coverImageURLsText,
+            isPaywalled: isPaywalled,
+            unlockPriceCredits: Int(unlockPriceText) ?? 5
         )
         if let data = try? JSONEncoder().encode(snap) {
             UserDefaults.standard.set(data, forKey: CreateDraftStore.key)
@@ -624,6 +644,8 @@ struct CreateRoutineView: View {
         customOtherLabel = snap.customOtherLabel
         steps = snap.steps.isEmpty ? [RoutineStep()] : snap.steps
         coverImageURLsText = snap.coverURLsText
+        isPaywalled = snap.isPaywalled
+        unlockPriceText = "\(max(1, snap.unlockPriceCredits))"
     }
 
     private func clearCreateDraft() {
@@ -667,7 +689,9 @@ struct CreateRoutineView: View {
             steps: valid,
             customKindLabel: kind == .other ? customOtherLabel.trimmingCharacters(in: .whitespacesAndNewlines) : nil,
             imageAttachmentIds: imageIds,
-            remoteCoverImageURLs: parsedRoutineImageURLLines(coverImageURLsText)
+            remoteCoverImageURLs: parsedRoutineImageURLLines(coverImageURLsText),
+            isPaywalled: isPaywalled,
+            unlockPriceCredits: max(1, Int(unlockPriceText) ?? 5)
         )
         library.insertPublishedRoutine(routine)
         clearCreateDraft()
@@ -678,10 +702,15 @@ struct CreateRoutineView: View {
         stagedPhotoData = []
         photoPickerItems = []
         coverImageURLsText = ""
+        isPaywalled = false
+        unlockPriceText = "5"
         didPublish = true
         Task {
             do {
-                _ = try await VoltisGraphQLClient.shared.syncRoutineForDiscover(routine)
+                try await VoltisGraphQLClient.shared.publishRoutine(
+                    routine,
+                    bearerToken: authToken.isEmpty ? nil : authToken
+                )
             } catch {
                 await MainActor.run {
                     apiSyncMessage = error.localizedDescription
@@ -699,6 +728,7 @@ struct EditRoutineView: View {
     @Environment(\.colorScheme) private var scheme
     @Environment(\.colorPalette) private var colorPalette
     @AppStorage("itgirl.playfulAnimations") private var playfulAnimations = true
+    @AppStorage("itgirl.authToken") private var authToken = ""
     @State var routine: Routine
     @Environment(\.dismiss) private var dismiss
 
@@ -707,6 +737,7 @@ struct EditRoutineView: View {
     @State private var photoPickerItems: [PhotosPickerItem] = []
     @State private var stagedPhotoData: [Data] = []
     @State private var coverURLsText = ""
+    @State private var unlockPriceText = "5"
     @State private var showOtherWarning = false
     @State private var showStepsWarning = false
     @State private var showApiSyncAlert = false
@@ -727,6 +758,8 @@ struct EditRoutineView: View {
                 }
                 .navigationTitle("Edit")
                 .navigationBarTitleDisplayMode(.inline)
+                .toolbar(.hidden, for: .tabBar)
+                .toolbar(.hidden, for: .navigationBar)
                 .toolbarBackground(.ultraThinMaterial, for: .navigationBar)
                 .onAppear(perform: loadEditRoutineState)
                 .alert("Name your category", isPresented: $showOtherWarning) {
@@ -775,6 +808,18 @@ struct EditRoutineView: View {
                                 .itGirlRoundedField()
                         }
                         .padding(.top, 4)
+                    }
+
+                    Divider()
+                        .overlay(ThemeColors.accent(for: scheme, palette: colorPalette).opacity(0.25))
+                    Toggle("Lock this routine behind a paywall", isOn: $routine.isPaywalled)
+                    if routine.isPaywalled {
+                        VStack(alignment: .leading, spacing: 6) {
+                            ITGFieldLabel(text: "Unlock price (credits)")
+                            TextField("5", text: $unlockPriceText)
+                                .keyboardType(.numberPad)
+                                .itGirlRoundedField()
+                        }
                     }
                 }
             }
@@ -897,6 +942,7 @@ struct EditRoutineView: View {
         customOtherLabel = routine.customKindLabel ?? ""
         coverURLsText = routine.remoteCoverImageURLs.joined(separator: "\n")
         stagedPhotoData = routine.imageAttachmentIds.compactMap { RoutineImageStore.shared.loadData(id: $0) }
+        unlockPriceText = "\(max(1, routine.unlockPriceCredits))"
     }
 
     private var canSave: Bool {
@@ -942,10 +988,14 @@ struct EditRoutineView: View {
         routine.body = valid.isEmpty ? routine.body : Routine.flattenedBody(from: valid)
         routine.customKindLabel = routine.kind == .other ? customOtherLabel.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         routine.remoteCoverImageURLs = parsedRoutineImageURLLines(coverURLsText)
+        routine.unlockPriceCredits = max(1, Int(unlockPriceText) ?? routine.unlockPriceCredits)
         library.updateMyRoutine(routine)
         Task {
             do {
-                _ = try await VoltisGraphQLClient.shared.syncRoutineForDiscover(routine)
+                try await VoltisGraphQLClient.shared.publishRoutine(
+                    routine,
+                    bearerToken: authToken.isEmpty ? nil : authToken
+                )
             } catch {
                 await MainActor.run {
                     apiSyncMessage = error.localizedDescription
@@ -1003,10 +1053,14 @@ struct EditRoutineView: View {
         routine.customKindLabel = routine.kind == .other ? customOtherLabel.trimmingCharacters(in: .whitespacesAndNewlines) : nil
         routine.imageAttachmentIds = newIds
         routine.remoteCoverImageURLs = parsedRoutineImageURLLines(coverURLsText)
+        routine.unlockPriceCredits = max(1, Int(unlockPriceText) ?? routine.unlockPriceCredits)
         library.updateMyRoutine(routine)
         Task {
             do {
-                _ = try await VoltisGraphQLClient.shared.syncRoutineForDiscover(routine)
+                try await VoltisGraphQLClient.shared.publishRoutine(
+                    routine,
+                    bearerToken: authToken.isEmpty ? nil : authToken
+                )
             } catch {
                 await MainActor.run {
                     apiSyncMessage = error.localizedDescription

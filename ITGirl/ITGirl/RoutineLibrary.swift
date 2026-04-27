@@ -1,13 +1,46 @@
 import Foundation
 import Observation
 
+struct ProfileReview: Identifiable, Codable, Hashable {
+    var id: UUID
+    var reviewerName: String
+    var rating: Int
+    var text: String
+
+    init(id: UUID = UUID(), reviewerName: String, rating: Int, text: String) {
+        self.id = id
+        self.reviewerName = reviewerName
+        self.rating = min(5, max(1, rating))
+        self.text = text
+    }
+}
+
 @Observable
 final class RoutineLibrary {
     private(set) var communityRoutines: [Routine] = []
     private(set) var myRoutines: [Routine] = []
     private(set) var savedRoutines: [Routine] = []
+    private(set) var purchasedRoutineSourceIDs: Set<UUID> = []
 
     var displayName: String {
+        didSet { persistProfile() }
+    }
+    var bio: String {
+        didSet { persistProfile() }
+    }
+    var profilePhotoURL: String {
+        didSet { persistProfile() }
+    }
+    var profilePhotoData: Data? {
+        didSet { persistProfile() }
+    }
+    var following: [String] {
+        didSet { persistProfile() }
+    }
+    var followers: [String] {
+        didSet { persistProfile() }
+    }
+    var reviews: [ProfileReview] {
         didSet { persistProfile() }
     }
 
@@ -17,10 +50,26 @@ final class RoutineLibrary {
         static let saved = "itgirl.savedRoutines"
         static let communityExtras = "itgirl.communityExtras"
         static let displayName = "itgirl.displayName"
+        static let bio = "itgirl.profile.bio"
+        static let profilePhotoURL = "itgirl.profile.photoURL"
+        static let profilePhotoData = "itgirl.profile.photoData"
+        static let following = "itgirl.profile.following"
+        static let followers = "itgirl.profile.followers"
+        static let reviews = "itgirl.profile.reviews"
+        static let purchasedSourceIDs = "itgirl.purchasedRoutineSourceIDs"
     }
 
     init() {
         displayName = defaults.string(forKey: Key.displayName) ?? "IT Girl"
+        bio = defaults.string(forKey: Key.bio) ?? "Wellness routines, cozy systems, and tiny daily wins."
+        profilePhotoURL = defaults.string(forKey: Key.profilePhotoURL) ?? ""
+        profilePhotoData = defaults.data(forKey: Key.profilePhotoData)
+        following = (try? JSONDecoder().decode([String].self, from: defaults.data(forKey: Key.following) ?? Data())) ?? ["Noa", "Mara", "Alex"]
+        followers = (try? JSONDecoder().decode([String].self, from: defaults.data(forKey: Key.followers) ?? Data())) ?? ["Jules", "Riley", "Kai", "Mina"]
+        reviews = (try? JSONDecoder().decode([ProfileReview].self, from: defaults.data(forKey: Key.reviews) ?? Data())) ?? [
+            ProfileReview(reviewerName: "Noa", rating: 5, text: "So easy to follow. Loved the pacing."),
+            ProfileReview(reviewerName: "Alex", rating: 4, text: "Great structure and clean step flow.")
+        ]
         load()
     }
 
@@ -61,6 +110,7 @@ final class RoutineLibrary {
     }
 
     func saveRoutineToAccount(_ routine: Routine) {
+        guard canAccessPaidRoutine(routine) else { return }
         let already = savedRoutines.contains { $0.derivedFromId == routine.id || $0.id == routine.id }
         guard !already else { return }
         let newImageIds = RoutineImageStore.shared.duplicate(ids: routine.imageAttachmentIds)
@@ -93,11 +143,35 @@ final class RoutineLibrary {
         savedRoutines.contains { $0.derivedFromId == routine.id || $0.id == routine.id }
     }
 
+    func canAccessPaidRoutine(_ routine: Routine) -> Bool {
+        guard routine.isPaywalled else { return true }
+        if myRoutines.contains(where: { $0.id == routine.id }) { return true }
+        if purchasedRoutineSourceIDs.contains(routine.id) { return true }
+        return isSaved(routine)
+    }
+
+    func purchaseRoutineAccess(_ routine: Routine) {
+        guard routine.isPaywalled else {
+            saveRoutineToAccount(routine)
+            return
+        }
+        purchasedRoutineSourceIDs.insert(routine.id)
+        saveRoutineToAccount(routine)
+        persistPurchased()
+    }
+
+    func applyAuthSession(_ session: AuthSessionPayload) {
+        displayName = session.displayName.isEmpty ? displayName : session.displayName
+        profilePhotoURL = session.profilePhotoURL ?? profilePhotoURL
+    }
+
     // MARK: - Persistence
 
     private func load() {
         myRoutines = decode([Routine].self, from: defaults.data(forKey: Key.my)) ?? []
         savedRoutines = decode([Routine].self, from: defaults.data(forKey: Key.saved)) ?? []
+        let purchasedIDs = decode([UUID].self, from: defaults.data(forKey: Key.purchasedSourceIDs)) ?? []
+        purchasedRoutineSourceIDs = Set(purchasedIDs)
         let extras = decode([Routine].self, from: defaults.data(forKey: Key.communityExtras)) ?? []
         communityRoutines = Self.seedCommunity + extras
         var seen = Set<UUID>()
@@ -109,6 +183,7 @@ final class RoutineLibrary {
         persistMy()
         persistSaved()
         persistCommunityExtras()
+        persistPurchased()
     }
 
     private func persistMy() {
@@ -121,6 +196,16 @@ final class RoutineLibrary {
 
     private func persistProfile() {
         defaults.set(displayName, forKey: Key.displayName)
+        defaults.set(bio, forKey: Key.bio)
+        defaults.set(profilePhotoURL, forKey: Key.profilePhotoURL)
+        defaults.set(profilePhotoData, forKey: Key.profilePhotoData)
+        defaults.set(encode(following), forKey: Key.following)
+        defaults.set(encode(followers), forKey: Key.followers)
+        defaults.set(encode(reviews), forKey: Key.reviews)
+    }
+
+    private func persistPurchased() {
+        defaults.set(encode(Array(purchasedRoutineSourceIDs)), forKey: Key.purchasedSourceIDs)
     }
 
     private func persistCommunityExtras() {
@@ -448,7 +533,9 @@ final class RoutineLibrary {
                 kind: .grwm,
                 steps: grwmSteps,
                 imageAttachmentIds: [],
-                remoteCoverImageURLs: [imgGrwmHero, "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=600&q=80"]
+                remoteCoverImageURLs: [imgGrwmHero, "https://images.unsplash.com/photo-1596462502278-27bfdc403348?auto=format&fit=crop&w=600&q=80"],
+                isPaywalled: true,
+                unlockPriceCredits: 6
             ),
             Routine(
                 id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-000000000002")!,
@@ -459,7 +546,9 @@ final class RoutineLibrary {
                 kind: .skincare,
                 steps: skincareSteps,
                 imageAttachmentIds: [],
-                remoteCoverImageURLs: [imgSkinHero, imgMask]
+                remoteCoverImageURLs: [imgSkinHero, imgMask],
+                isPaywalled: true,
+                unlockPriceCredits: 9
             ),
             Routine(
                 id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-000000000003")!,
@@ -470,7 +559,9 @@ final class RoutineLibrary {
                 kind: .fitness,
                 steps: walkSteps,
                 imageAttachmentIds: [],
-                remoteCoverImageURLs: [imgRunHero, imgRunTrack, imgShoes]
+                remoteCoverImageURLs: [imgRunHero, imgRunTrack, imgShoes],
+                isPaywalled: true,
+                unlockPriceCredits: 7
             ),
             Routine(
                 id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-000000000004")!,
@@ -492,7 +583,9 @@ final class RoutineLibrary {
                 kind: .morning,
                 steps: morningSteps,
                 imageAttachmentIds: [],
-                remoteCoverImageURLs: [imgMorning, "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80"]
+                remoteCoverImageURLs: [imgMorning, "https://images.unsplash.com/photo-1506126613408-eca07ce68773?auto=format&fit=crop&w=900&q=80"],
+                isPaywalled: true,
+                unlockPriceCredits: 8
             ),
             Routine(
                 id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-000000000006")!,
@@ -527,7 +620,9 @@ final class RoutineLibrary {
                 kind: .fitness,
                 steps: hiitSteps,
                 imageAttachmentIds: [],
-                remoteCoverImageURLs: [imgHiit, imgRunTrack]
+                remoteCoverImageURLs: [imgHiit, imgRunTrack],
+                isPaywalled: true,
+                unlockPriceCredits: 12
             ),
             Routine(
                 id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-000000000009")!,

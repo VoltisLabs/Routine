@@ -12,16 +12,18 @@ struct MainTabView: View {
                 .tabItem { Label("Discover", systemImage: "sparkle.magnifyingglass") }
                 .tag(0)
 
+            NavigationStack {
+                MessagesView()
+            }
+            .tabItem { Label("Messages", systemImage: "bubble.left.and.bubble.right") }
+            .tag(1)
+
             CreateRoutineView()
                 .tabItem { Label("Create", systemImage: "square.and.pencil") }
-                .tag(1)
+                .tag(2)
 
             MyRoutinesView()
                 .tabItem { Label("Mine", systemImage: "person.crop.circle") }
-                .tag(2)
-
-            SavedRoutinesView()
-                .tabItem { Label("Saved", systemImage: "bookmark.fill") }
                 .tag(3)
 
             AccountView()

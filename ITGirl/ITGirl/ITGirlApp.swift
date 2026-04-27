@@ -3,8 +3,9 @@ import SwiftUI
 @main
 struct ITGirlApp: App {
     @State private var library = RoutineLibrary()
+    @AppStorage("itgirl.signedIn") private var signedIn = false
     @AppStorage("itgirl.appearance") private var appearanceRaw = "system"
-    @AppStorage("itgirl.colorPalette") private var colorPaletteRaw = ColorPaletteID.classic.rawValue
+    @AppStorage("itgirl.colorPalette") private var colorPaletteRaw = ColorPaletteID.graphite.rawValue
 
     private var preferredScheme: ColorScheme? {
         switch appearanceRaw {
@@ -20,10 +21,16 @@ struct ITGirlApp: App {
 
     var body: some Scene {
         WindowGroup {
-            MainTabView()
-                .environment(library)
-                .environment(\.colorPalette, colorPalette)
-                .preferredColorScheme(preferredScheme)
+            Group {
+                if signedIn {
+                    MainTabView()
+                } else {
+                    AuthWelcomeView()
+                }
+            }
+            .environment(library)
+            .environment(\.colorPalette, colorPalette)
+            .preferredColorScheme(preferredScheme)
         }
     }
 }

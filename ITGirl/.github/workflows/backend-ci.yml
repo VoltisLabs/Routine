@@ -1,0 +1,59 @@
+name: backend-ci
+
+on:
+  push:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+  pull_request:
+    paths:
+      - 'backend/**'
+      - '.github/workflows/backend-ci.yml'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: itgirl
+          POSTGRES_USER: itgirl
+          POSTGRES_PASSWORD: itgirl
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd="pg_isready -U itgirl -d itgirl"
+          --health-interval=10s
+          --health-timeout=5s
+          --health-retries=5
+
+    defaults:
+      run:
+        working-directory: backend
+
+    env:
+      DJANGO_SECRET_KEY: ci-secret
+      DJANGO_DEBUG: '0'
+      DJANGO_ALLOWED_HOSTS: localhost,127.0.0.1
+      DB_ENGINE: django.db.backends.postgresql
+      POSTGRES_DB: itgirl
+      POSTGRES_USER: itgirl
+      POSTGRES_PASSWORD: itgirl
+      POSTGRES_HOST: localhost
+      POSTGRES_PORT: 5432
+      APP_BASE_URL: http://localhost:8000
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+      - name: Run migrations
+        run: python manage.py migrate
+      - name: Run checks
+        run: python manage.py check
+      - name: Run tests
+        run: python manage.py test

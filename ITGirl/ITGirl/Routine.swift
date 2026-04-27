@@ -154,6 +154,8 @@ struct Routine: Identifiable, Codable, Hashable {
     var imageAttachmentIds: [UUID]
     /// HTTPS image URLs for cover / gallery (shown when no local photos, or alongside).
     var remoteCoverImageURLs: [String]
+    var isPaywalled: Bool
+    var unlockPriceCredits: Int
 
     init(
         id: UUID = UUID(),
@@ -166,7 +168,9 @@ struct Routine: Identifiable, Codable, Hashable {
         steps: [RoutineStep]? = nil,
         customKindLabel: String? = nil,
         imageAttachmentIds: [UUID] = [],
-        remoteCoverImageURLs: [String] = []
+        remoteCoverImageURLs: [String] = [],
+        isPaywalled: Bool = false,
+        unlockPriceCredits: Int = 0
     ) {
         self.id = id
         self.title = title
@@ -179,11 +183,14 @@ struct Routine: Identifiable, Codable, Hashable {
         self.customKindLabel = customKindLabel
         self.imageAttachmentIds = imageAttachmentIds
         self.remoteCoverImageURLs = remoteCoverImageURLs
+        self.isPaywalled = isPaywalled
+        self.unlockPriceCredits = max(0, unlockPriceCredits)
     }
 
     enum CodingKeys: String, CodingKey {
         case id, title, body, authorDisplayName, createdAt, kind, derivedFromId
         case steps, customKindLabel, imageAttachmentIds, remoteCoverImageURLs
+        case isPaywalled, unlockPriceCredits
     }
 
     init(from decoder: Decoder) throws {
@@ -199,6 +206,8 @@ struct Routine: Identifiable, Codable, Hashable {
         customKindLabel = try c.decodeIfPresent(String.self, forKey: .customKindLabel)
         imageAttachmentIds = try c.decodeIfPresent([UUID].self, forKey: .imageAttachmentIds) ?? []
         remoteCoverImageURLs = try c.decodeIfPresent([String].self, forKey: .remoteCoverImageURLs) ?? []
+        isPaywalled = try c.decodeIfPresent(Bool.self, forKey: .isPaywalled) ?? false
+        unlockPriceCredits = max(0, try c.decodeIfPresent(Int.self, forKey: .unlockPriceCredits) ?? 0)
     }
 
     func encode(to encoder: Encoder) throws {
@@ -218,6 +227,28 @@ struct Routine: Identifiable, Codable, Hashable {
         if !remoteCoverImageURLs.isEmpty {
             try c.encode(remoteCoverImageURLs, forKey: .remoteCoverImageURLs)
         }
+        if isPaywalled {
+            try c.encode(isPaywalled, forKey: .isPaywalled)
+            try c.encode(max(1, unlockPriceCredits), forKey: .unlockPriceCredits)
+        }
+    }
+
+    var effectiveUnlockPriceCredits: Int {
+        max(1, unlockPriceCredits)
+    }
+
+    /// Price label for UI badges and lock prompts.
+    /// Heuristic: values >= 100 are treated as pence (499 -> £4.99), otherwise pounds (9 -> £9.00).
+    var displayUnlockPriceGBP: String {
+        let raw = effectiveUnlockPriceCredits
+        let amount = raw >= 100 ? Decimal(raw) / 100 : Decimal(raw)
+        let formatter = NumberFormatter()
+        formatter.numberStyle = .currency
+        formatter.currencyCode = "GBP"
+        formatter.locale = Locale(identifier: "en_GB")
+        formatter.minimumFractionDigits = 2
+        formatter.maximumFractionDigits = 2
+        return formatter.string(from: amount as NSDecimalNumber) ?? "£\(raw).00"
     }
 
     var displayKindTitle: String {
